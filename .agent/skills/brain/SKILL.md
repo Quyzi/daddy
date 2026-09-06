@@ -33,20 +33,30 @@ The human curates sources, directs analysis, and asks the right questions. The L
 
 ## Step 2: Scaffold the Knowledge Base
 
-Create the folder structure in the current working directory:
+All brains live under a shared `brains/` directory at the repo/project root, one subfolder per brain, each its own independent git repository. `brains/` itself MUST be excluded from the outer project's git (it holds nested repos, not tracked content).
+
+1. Ensure the outer `.gitignore` (create it if absent) contains a `brains/` entry. Check first (`grep -qxF 'brains/' .gitignore`) — never duplicate the line.
+2. Create the folder structure under `brains/`:
 
 ```bash
-mkdir -p {slug}/raw/assets {slug}/wiki {slug}/outputs
+mkdir -p brains/{slug}/raw/assets brains/{slug}/wiki brains/{slug}/outputs
 ```
 
+3. After Steps 3-5 below have written every file into `brains/{slug}/`, initialize its own git repo and make the initial commit:
+
+```bash
+cd brains/{slug} && git init -q && git add . && git commit -q -m "setup"
+```
+
+This is required, not optional — each brain is a standalone repo so its full history (sources ingested, pages compiled, mistakes undone) travels with it independent of whatever project it's scaffolded inside.
+
 **Recommended setup (optional but valuable):**
-- Open this folder in **Obsidian** for the best viewing experience. The [[links]] become clickable navigation, and the graph view shows you the shape of your wiki at a glance (which pages are hubs, which are orphans). Any text editor works, but Obsidian is purpose-built for this.
-- Initialize a **git repo** (`git init && git add . && git commit -m "setup"`). Your wiki is just markdown files. Git gives you full version history, the ability to undo anything the AI messes up, and collaboration for free.
+- Open `brains/{slug}/` in **Obsidian** for the best viewing experience. The [[links]] become clickable navigation, and the graph view shows you the shape of your wiki at a glance (which pages are hubs, which are orphans). Any text editor works, but Obsidian is purpose-built for this.
 - **Scale note:** The index-file approach works well up to ~100 sources and a few hundred wiki pages. Beyond that, consider adding a search tool like [qmd](https://github.com/tobi/qmd) (local markdown search with hybrid BM25/vector search, works as CLI and MCP server).
 
 ## Step 3: Generate the Schema File
 
-Write `{slug}/CLAUDE.md` with the following content. Replace `{focus}` with the user's focus area, `{interests}` with their listed interests, and `{source_types}` with the source types they named:
+Write `brains/{slug}/CLAUDE.md` with the following content. Replace `{focus}` with the user's focus area, `{interests}` with their listed interests, and `{source_types}` with the source types they named:
 
 ```markdown
 # Knowledge Base Schema
@@ -121,7 +131,7 @@ Output: wiki/lint-report-[date].md
 
 ## Step 4: Create INDEX.md and LOG.md
 
-Write `{slug}/wiki/index.md`:
+Write `brains/{slug}/wiki/index.md`:
 
 ```markdown
 # Wiki Index
@@ -133,7 +143,7 @@ Maintained by the LLM. Every page listed with a one-line summary.
 _(No pages yet. Add sources to raw/ and run the compile prompt to build the wiki.)_
 ```
 
-Write `{slug}/wiki/log.md`:
+Write `brains/{slug}/wiki/log.md`:
 
 ```markdown
 # Wiki Log
@@ -157,7 +167,7 @@ For each URL:
    - Wait for content: `agent-browser wait --load networkidle`
    - Extract the main content: `agent-browser get text "article"` (fall back to `agent-browser get text "main"`, then `agent-browser get text "body"`)
    - Get the page title: `agent-browser get title`
-   - Save as `{slug}/raw/{slugified-title}.md` with the extracted text
+   - Save as `brains/{slug}/raw/{slugified-title}.md` with the extracted text
    - Close when done: `agent-browser close`
 
 Print: "Scraped {n} sources into raw/."
@@ -171,7 +181,7 @@ Read `${CLAUDE_SKILL_DIR}/references/starter-prompts.md` and print the full cont
 Print:
 
 ```
-Your knowledge base is ready at: {slug}/
+Your knowledge base is ready at: brains/{slug}/ (its own git repo)
 
 Here's how to start:
 
@@ -188,7 +198,11 @@ Here's how to start:
 
 4. Run a health check periodically to catch contradictions and gaps.
 
-5. (Optional) Install agent-browser for automated web scraping:
+5. This brain is its own git repo (brains/{slug}/.git), separate from
+   whatever project it's scaffolded inside. Commit as you go if you
+   want extra checkpoints beyond the initial "setup" commit.
+
+6. (Optional) Install agent-browser for automated web scraping:
    npm install -g agent-browser && agent-browser install
    Then: "scrape [URL] into raw/" and the LLM handles the rest.
 

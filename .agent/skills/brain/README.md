@@ -20,8 +20,8 @@ second-brain/
 
 1. Drop this folder into `~/.claude/skills/` (or your project's `.claude/skills/`).
 2. In Claude Code, say: `use the second-brain skill to set up a knowledge base about [your topic]`
-3. Claude will ask 3-4 questions, then scaffold the full folder structure with `CLAUDE.md`, `wiki/index.md`, and `wiki/log.md`.
-4. Start dropping sources into `raw/` and run the compile prompt from `references/starter-prompts.md`.
+3. Claude will ask 3-4 questions, then scaffold the full folder structure at `brains/{your-topic}/` with `CLAUDE.md`, `wiki/index.md`, and `wiki/log.md` — and initialize that folder as its own git repo (`brains/` itself is gitignored in the outer project; each brain is a standalone repo underneath it).
+4. Start dropping sources into `brains/{your-topic}/raw/` and either run the compile prompt from `references/starter-prompts.md`, or use the companion `second-brain-compile` skill to run it without retyping.
 
 ### Option 2 — Any AI tool (Cursor, Codex, ChatGPT, etc.)
 
@@ -35,8 +35,9 @@ second-brain/
 Read `SKILL.md` top to bottom. It's a step-by-step recipe. Follow the steps yourself:
 
 ```bash
-mkdir -p my-knowledge-base/{raw/assets,wiki,outputs}
-cd my-knowledge-base
+mkdir -p brains/my-knowledge-base/{raw/assets,wiki,outputs}
+echo "brains/" >> .gitignore   # once per outer project, if not already present
+cd brains/my-knowledge-base
 git init && git add . && git commit -m "setup"
 ```
 

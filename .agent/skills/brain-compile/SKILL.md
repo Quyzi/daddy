@@ -10,8 +10,9 @@ Companion to the `second-brain` setup skill. Runs the compile/ingest workflow ag
 
 ## Step 0: Locate the Knowledge Base
 
-- If `$ARGUMENTS` names a path, use it as the knowledge base root.
-- Else, if the current directory (or one unambiguous child directory) contains `CLAUDE.md` + `raw/` + `wiki/`, use it as the root.
+- If `$ARGUMENTS` names a path (or a bare brain name), use it as the knowledge base root, resolving a bare name against `brains/{name}` first.
+- Else, if the current directory itself contains `CLAUDE.md` + `raw/` + `wiki/`, use it as the root.
+- Else, if `brains/` exists: if it has exactly one subfolder, use `brains/{that-subfolder}`; if it has several, ask which brain to compile (list the subfolder names).
 - Else ask: "Which knowledge base folder should I compile? (the one containing CLAUDE.md, raw/, and wiki/)"
 - Read `{root}/CLAUDE.md` in full. It is the source of truth for this knowledge base's schema and Ingest Workflow — follow it exactly, even where it differs from the defaults below. Missing `CLAUDE.md` → stop and tell the user this folder wasn't scaffolded by the second-brain skill.
 
