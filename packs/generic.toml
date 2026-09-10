@@ -1,0 +1,18 @@
+# Generic rule pack: works for any brain, any domain.
+#
+# A single catch-all rule that turns every heading into a "topic" entity.
+# `require` is empty, so it always matches — this is the floor every
+# other pack falls back to (see `CompiledPack::load_with_fallback`):
+# whatever a domain-specific pack's own rules don't recognize still ends
+# up as a searchable, linkable topic rather than disappearing into
+# unstructured chunk text.
+#
+# `atomic = false` means a long topic section is split into multiple
+# prose chunks at the ~1200-token budget instead of being forced into one
+# giant chunk — appropriate for a arbitrary chapter of prose, unlike a
+# genuinely atomic structured definition (a spell, a monster stat block).
+
+[[entity]]
+kind = "topic"
+anchor = { heading = true }
+atomic = false

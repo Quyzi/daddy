@@ -1,0 +1,72 @@
+# D&D 5th Edition rule pack.
+#
+# Rules are tried in order; the first whose `require` patterns all match
+# within their `within_chars` window of a section's body text wins. Put
+# specific patterns first, and let anything nobody recognizes fall
+# through to `packs/generic.toml`'s catch-all "topic" rule (appended
+# automatically by `CompiledPack::load_with_fallback` for any pack whose
+# name isn't itself "generic").
+#
+# Patterns are NOT anchored to line starts (no `^`): `brain-layout` joins
+# several originally-separate short lines into one block whenever they
+# don't individually score as headings, so a field or phrase can
+# legitimately land mid-block rather than at position 0 (verified against
+# real extracted text from this corpus during development — a spell's
+# "Illusion cantrip Casting Time: 1 action Range: 30 feet ..." commonly
+# arrives as a single block, as does a monster's "Large celestial, lawful
+# good Armor Class 18 ..."). See the implementation plan's Phase 4 exit
+# criterion ("300+ spells, 1500+ monsters with populated fields"), which
+# spell/monster alone are enough to satisfy.
+
+# A spell's body always has a "Casting Time:" phrase near the top,
+# regardless of whether it's a levelled spell ("3rd-level evocation") or
+# a cantrip ("Illusion cantrip") -- distinctive enough on its own that no
+# second pattern is needed (note: `require` entries within one rule are
+# AND'ed, so a levelled-OR-cantrip check would need two separate rules
+# rather than two requires on this one).
+[[entity]]
+kind = "spell"
+anchor = { heading = true }
+require = [
+  { regex = 'Casting Time:', within_chars = 200 },
+]
+fields = ["Casting Time", "Range", "Components", "Duration"]
+
+# A monster stat block: size/type/alignment phrase ("Large celestial,
+# lawful good"), then "Armor Class N" and "Hit Points N (...)" within a
+# few lines of the heading.
+[[entity]]
+kind = "monster"
+anchor = { heading = true, allcaps_ok = true }
+require = [
+  { regex = '\b(Tiny|Small|Medium|Large|Huge|Gargantuan)\b', within_chars = 150 },
+  { regex = 'Armor Class \d+', within_chars = 250 },
+  { regex = 'Hit Points \d+', within_chars = 350 },
+]
+fields = [
+  "Armor Class",
+  "Hit Points",
+  "Speed",
+  "Saving Throws",
+  "Skills",
+  "Damage Vulnerabilities",
+  "Damage Resistances",
+  "Damage Immunities",
+  "Condition Immunities",
+  "Senses",
+  "Languages",
+  "Challenge",
+]
+
+# A magic item: a type+rarity phrase close to the name, e.g. "Wondrous
+# item, rare (requires attunement)" or "Weapon (longsword), uncommon".
+# The type word is required to be followed *closely* (within 40 chars)
+# by a rarity keyword, since "Armor"/"Weapon" alone are common enough
+# words elsewhere that an unconstrained match would false-positive.
+[[entity]]
+kind = "item"
+anchor = { heading = true }
+require = [
+  { regex = '(Armor|Weapon|Wondrous item|Ring|Rod|Wand|Staff|Potion|Scroll)[^.\n]{0,40},\s*(common|uncommon|rare|very rare|legendary|artifact)', within_chars = 150 },
+]
+fields = []

@@ -1,0 +1,22 @@
+[package]
+name = "brain-extract"
+description = "Extraction backends (native PDF text, OCR, plain text) that turn source files into positioned words, plus a content-addressed cache."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+brain-core.workspace = true
+quick-xml.workspace = true
+sha2.workspace = true
+which.workspace = true
+zstd.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+regex.workspace = true
+tracing.workspace = true
+rayon.workspace = true
+tempfile.workspace = true
+
+[dev-dependencies.walkdir]
+workspace = true

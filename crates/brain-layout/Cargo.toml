@@ -1,0 +1,13 @@
+[package]
+name = "brain-layout"
+description = "Pure-geometry page reconstruction: word rejoin, column detection, reading order, chrome stripping, and heading detection. No I/O."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+brain-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]

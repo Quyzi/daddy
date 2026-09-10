@@ -1,0 +1,17 @@
+[package]
+name = "brain-wiki"
+description = "Deterministic wiki page generation and health-check linting over the brain document graph."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+brain-core.workspace = true
+brain-store.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+brain-index.workspace = true
