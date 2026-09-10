@@ -6,8 +6,10 @@
 //! surfaces the structural facts a human or AI needs to make them.)
 
 use brain_core::error::Result;
+use brain_core::slugify;
 use brain_store::Store;
 use serde::Serialize;
+use std::collections::HashSet;
 
 /// One entity where two or more source documents state a different
 /// value for the same field.
@@ -21,6 +23,15 @@ pub struct Contradiction {
     pub values: Vec<(String, String)>,
 }
 
+/// One `[[wikilink]]` whose target doesn't match any ingested document.
+#[derive(Debug, Clone, Serialize)]
+pub struct UnresolvedWikilink {
+    /// The document containing the link.
+    pub source_document: String,
+    /// The link's target text, as written.
+    pub target: String,
+}
+
 /// The full result of one `lint` run.
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct LintReport {
@@ -28,6 +39,11 @@ pub struct LintReport {
     pub orphans: Vec<String>,
     /// Field-level contradictions across documents.
     pub contradictions: Vec<Contradiction>,
+    /// `[[wikilink]]`s whose target isn't (yet) an ingested document —
+    /// not dropped at index time (see `brain_index::orchestrate`'s
+    /// wikilink-resolution pass), surfaced here instead so nothing about
+    /// a broken link is silently lost.
+    pub unresolved_wikilinks: Vec<UnresolvedWikilink>,
 }
 
 /// Runs every lint check against `store`.
@@ -44,7 +60,36 @@ pub fn lint(store: &Store) -> Result<LintReport> {
         });
     }
 
-    Ok(LintReport { orphans, contradictions })
+    let unresolved_wikilinks = find_unresolved_wikilinks(store)?;
+
+    Ok(LintReport { orphans, contradictions, unresolved_wikilinks })
+}
+
+/// Re-derives every `[[wikilink]]`'s resolution against the current
+/// document set, rather than reading a persisted list — the same
+/// "compute live from the graph" approach as every other check here (see
+/// this module's top-level docs), and it means a link that resolves
+/// today because its target has since been ingested stops being
+/// reported with no extra bookkeeping anywhere.
+fn find_unresolved_wikilinks(store: &Store) -> Result<Vec<UnresolvedWikilink>> {
+    let documents = store.list_documents()?;
+    let known_slugs: HashSet<String> = documents.iter().map(|d| slugify(&d.title)).collect();
+
+    let mut unresolved = Vec::new();
+    for doc in &documents {
+        let Some(doc_id) = doc.id else { continue };
+        for chunk in store.list_chunks(doc_id)? {
+            for link in brain_index::extract_wikilinks(&chunk.text) {
+                if !known_slugs.contains(&slugify(&link.target)) {
+                    unresolved.push(UnresolvedWikilink {
+                        source_document: doc.title.clone(),
+                        target: link.target,
+                    });
+                }
+            }
+        }
+    }
+    Ok(unresolved)
 }
 
 /// Renders a [`LintReport`] as markdown, matching the brain schema's
@@ -68,10 +113,20 @@ pub fn render_lint_markdown(report: &LintReport) -> String {
 
     out.push_str(&format!("## Orphan entities ({})\n\n", report.orphans.len()));
     if report.orphans.is_empty() {
-        out.push_str("None found.\n");
+        out.push_str("None found.\n\n");
     } else {
         for name in &report.orphans {
             out.push_str(&format!("- {name}\n"));
+        }
+        out.push('\n');
+    }
+
+    out.push_str(&format!("## Unresolved wikilinks ({})\n\n", report.unresolved_wikilinks.len()));
+    if report.unresolved_wikilinks.is_empty() {
+        out.push_str("None found.\n");
+    } else {
+        for link in &report.unresolved_wikilinks {
+            out.push_str(&format!("- [[{}]] in {} \u{2014} no matching document\n", link.target, link.source_document));
         }
     }
     out
@@ -91,12 +146,12 @@ mod tests {
     #[test]
     fn renders_a_contradiction_with_all_its_sources() {
         let report = LintReport {
-            orphans: vec![],
             contradictions: vec![Contradiction {
                 entity_name: "Goblin".into(),
                 key: "Hit Points".into(),
                 values: vec![("7".into(), "Monster Manual".into()), ("9".into(), "Errata 2019".into())],
             }],
+            ..Default::default()
         };
         let md = render_lint_markdown(&report);
         assert!(md.contains("**Goblin** \u{2014} `Hit Points`"));

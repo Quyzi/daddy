@@ -34,6 +34,7 @@ fn seed_store() -> Store {
             ingested_at: Utc::now(),
             extractor: ExtractorKind::Poppler,
             ocr: false,
+            frontmatter: None,
         })
         .unwrap();
     let phb_page = store
@@ -49,7 +50,7 @@ fn seed_store() -> Store {
     .enumerate()
     {
         store
-            .insert_block(&Block { id: None, page_id: phb_page, col: 0, ord: ord as u32, bbox: BBox { x0: 0.0, y0: 0.0, x1: 1.0, y1: 1.0 }, kind, text: text.into() })
+            .insert_block(&Block { id: None, page_id: phb_page, col: 0, ord: ord as u32, bbox: BBox { x0: 0.0, y0: 0.0, x1: 1.0, y1: 1.0 }, kind, text: text.into(), heading_level: None })
             .unwrap();
     }
 
@@ -65,6 +66,7 @@ fn seed_store() -> Store {
             ingested_at: Utc::now(),
             extractor: ExtractorKind::Poppler,
             ocr: false,
+            frontmatter: None,
         })
         .unwrap();
     let strahd_page = store
@@ -78,7 +80,7 @@ fn seed_store() -> Store {
     .enumerate()
     {
         store
-            .insert_block(&Block { id: None, page_id: strahd_page, col: 0, ord: ord as u32, bbox: BBox { x0: 0.0, y0: 0.0, x1: 1.0, y1: 1.0 }, kind, text: text.into() })
+            .insert_block(&Block { id: None, page_id: strahd_page, col: 0, ord: ord as u32, bbox: BBox { x0: 0.0, y0: 0.0, x1: 1.0, y1: 1.0 }, kind, text: text.into(), heading_level: None })
             .unwrap();
     }
 

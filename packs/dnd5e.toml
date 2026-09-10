@@ -70,3 +70,24 @@ require = [
   { regex = '(Armor|Weapon|Wondrous item|Ring|Rod|Wand|Staff|Potion|Scroll)[^.\n]{0,40},\s*(common|uncommon|rare|very rare|legendary|artifact)', within_chars = 150 },
 ]
 fields = []
+
+# A worked example of recognizing entities that came from a live SQL
+# datasource (see `.brain/sources.toml`, documented in this brain's
+# CLAUDE.md) rather than a book. A `[[datasource.query]]` whose SQL
+# aliases columns to match this pack's capitalization convention --
+#   SELECT name AS "Name", race AS "Race", location AS "Location", notes AS "Notes"
+#   FROM npcs ORDER BY name
+# -- makes `brain ingest` write one heading (the row's "Name" value)
+# followed by "Race: ..."/"Location: ..."/"Notes: ..." field blocks per
+# row: exactly the colon-labeled shape `brain-index`'s existing
+# field-continuation logic and this rule's `fields` list already handle,
+# so a campaign roster table gets full entity-graph treatment (fields,
+# gazetteer mentions, edges, a generated wiki page) with no indexing code
+# specific to datasources at all -- only this rule.
+[[entity]]
+kind = "npc"
+anchor = { heading = true }
+require = [
+  { regex = 'Race:', within_chars = 150 },
+]
+fields = ["Race", "Location", "Notes"]

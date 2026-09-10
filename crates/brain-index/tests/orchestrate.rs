@@ -35,6 +35,7 @@ fn insert_doc_with_blocks(store: &Store, title: &str, blocks_by_page: Vec<Vec<(B
             ingested_at: Utc::now(),
             extractor: ExtractorKind::Poppler,
             ocr: false,
+            frontmatter: None,
         })
         .unwrap();
 
@@ -62,6 +63,7 @@ fn insert_doc_with_blocks(store: &Store, title: &str, blocks_by_page: Vec<Vec<(B
                     bbox: BBox { x0: 0.0, y0: 0.0, x1: 10.0, y1: 10.0 },
                     kind: *kind,
                     text: text.to_string(),
+                    heading_level: None,
                 })
                 .unwrap();
         }
@@ -125,6 +127,118 @@ fn indexes_a_spell_and_a_cross_book_mention_end_to_end() {
     // edge from the tower entity to the fireball entity should exist.
     let edges = store.edges_from(tower.id.unwrap(), None).unwrap();
     assert!(edges.iter().any(|e| e.dst == fireball.id.unwrap()));
+}
+
+/// Like `insert_doc_with_blocks`, but shaped like a structured (Markdown/
+/// Obsidian) source: the heading carries `heading_level: Some(1)` (so
+/// it's this document's primary entity — see `orchestrate.rs`'s
+/// `doc_primary_entity` docs) and the document can carry front matter.
+fn insert_note(store: &Store, title: &str, body_text: &str, frontmatter: Option<&str>) -> brain_core::DocId {
+    let doc_id = store
+        .insert_document(&Document {
+            id: None,
+            path: format!("/tmp/{title}.md"),
+            sha256: title.to_string(),
+            title: title.to_string(),
+            kind: "md".to_string(),
+            page_count: 1,
+            bytes: 1,
+            ingested_at: Utc::now(),
+            extractor: ExtractorKind::Plain,
+            ocr: false,
+            frontmatter: frontmatter.map(str::to_string),
+        })
+        .unwrap();
+    let page_id = store
+        .insert_page(&Page {
+            id: None,
+            doc_id,
+            page_no: 1,
+            width: 1.0,
+            height: 1.0,
+            text: String::new(),
+            ocr_conf: None,
+            low_confidence: false,
+        })
+        .unwrap();
+    store
+        .insert_block(&Block {
+            id: None,
+            page_id,
+            col: 0,
+            ord: 0,
+            bbox: BBox { x0: 0.0, y0: 0.0, x1: 1.0, y1: 1.0 },
+            kind: BlockKind::Heading,
+            text: title.to_string(),
+            heading_level: Some(1),
+        })
+        .unwrap();
+    store
+        .insert_block(&Block {
+            id: None,
+            page_id,
+            col: 0,
+            ord: 1,
+            bbox: BBox { x0: 0.0, y0: 1.0, x1: 1.0, y1: 2.0 },
+            kind: BlockKind::Body,
+            text: body_text.to_string(),
+            heading_level: None,
+        })
+        .unwrap();
+    doc_id
+}
+
+#[test]
+fn wikilink_between_two_notes_becomes_a_links_to_edge() {
+    let mut store = Store::open_in_memory().unwrap();
+    insert_note(&store, "Strahd von Zarovich", "The vampire lord of Barovia.", None);
+    insert_note(&store, "Barovia", "See [[Strahd von Zarovich]] for the ruler of this land.", None);
+
+    let pack = CompiledPack::compile(&RulePack::parse(PACK_TOML).unwrap()).unwrap();
+    index_all(&mut store, &pack).unwrap();
+
+    let strahd = store.find_entity_by_slug("strahd-von-zarovich").unwrap().expect("strahd entity should exist");
+    let barovia = store.find_entity_by_slug("barovia").unwrap().expect("barovia entity should exist");
+
+    let edges = store.edges_from(barovia.id.unwrap(), Some(brain_core::EdgeKind::LinksTo)).unwrap();
+    assert!(
+        edges.iter().any(|e| e.dst == strahd.id.unwrap()),
+        "Barovia's [[wikilink]] to Strahd should produce a LinksTo edge"
+    );
+}
+
+#[test]
+fn inline_tag_and_frontmatter_tag_both_link_to_the_same_tag_entity() {
+    let mut store = Store::open_in_memory().unwrap();
+    insert_note(&store, "Session One", "The party meets #npc-ismark for the first time.", None);
+    insert_note(&store, "Ismark Kolyanovich", "A minor npc.", Some(r#"{"tags":["npc-ismark"]}"#));
+
+    let pack = CompiledPack::compile(&RulePack::parse(PACK_TOML).unwrap()).unwrap();
+    index_all(&mut store, &pack).unwrap();
+
+    let tag = store.find_entity_by_slug("npc-ismark").unwrap().expect("tag entity should exist");
+    assert_eq!(tag.kind, EntityKind::Other("tag".to_string()));
+
+    let session_one = store.find_entity_by_slug("session-one").unwrap().unwrap();
+    let ismark = store.find_entity_by_slug("ismark-kolyanovich").unwrap().unwrap();
+
+    let from_session = store.edges_from(session_one.id.unwrap(), Some(brain_core::EdgeKind::Mentions)).unwrap();
+    assert!(from_session.iter().any(|e| e.dst == tag.id.unwrap()), "inline #tag should link to the tag entity");
+
+    let from_ismark = store.edges_from(ismark.id.unwrap(), Some(brain_core::EdgeKind::Mentions)).unwrap();
+    assert!(from_ismark.iter().any(|e| e.dst == tag.id.unwrap()), "frontmatter tags: should link to the same tag entity");
+}
+
+#[test]
+fn frontmatter_aliases_resolve_by_alternate_name() {
+    let mut store = Store::open_in_memory().unwrap();
+    insert_note(&store, "Strahd von Zarovich", "The vampire lord.", Some(r#"{"aliases":["Strahd"]}"#));
+
+    let pack = CompiledPack::compile(&RulePack::parse(PACK_TOML).unwrap()).unwrap();
+    index_all(&mut store, &pack).unwrap();
+
+    let by_alias = store.find_entity_by_alias_norm("strahd").unwrap().expect("alias lookup should resolve");
+    assert_eq!(by_alias.slug, "strahd-von-zarovich");
 }
 
 #[test]

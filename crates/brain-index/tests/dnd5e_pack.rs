@@ -34,6 +34,7 @@ fn build_sections_from_fixture(name: &str, pack: &CompiledPack) -> Vec<brain_ind
                     bbox: b.bbox,
                     kind: b.kind,
                     text: b.text.clone(),
+                    heading_level: None,
                 },
             )
         })
@@ -81,6 +82,47 @@ fn recognizes_uridimmu_as_a_monster_with_stat_fields() {
     assert_eq!(r.kind, "monster");
     assert!(r.fields.iter().any(|(k, v)| k == "Armor Class" && v.contains("18")));
     assert!(r.fields.iter().any(|(k, v)| k == "Hit Points" && v.contains("150")));
+}
+
+#[test]
+fn recognizes_a_datasource_row_as_an_npc_with_fields() {
+    // Exactly the block shape `brain-cli`'s `write_datasource_query`
+    // produces for one SQL row: a heading (the row's name) followed by
+    // "{Column}: {value}" body blocks -- no PDF/layout fixture involved,
+    // proving the pack needs no datasource-specific indexing code at all.
+    let pack = dnd5e_pack();
+    let blocks: Vec<(u32, brain_core::Block)> = vec![
+        (1, heading_block("Ismark Kolyanovich", 0)),
+        (1, body_block("Race: Human", 1)),
+        (1, body_block("Location: Vallaki", 2)),
+        (1, body_block("Notes: Son of the burgomaster.", 3)),
+    ];
+    let sections = brain_index::build_sections(&blocks, &pack.all_field_labels());
+    let npc = sections
+        .iter()
+        .find(|s| s.title == "Ismark Kolyanovich")
+        .expect("the row's heading should be its own section");
+    let r = recognize(npc, &pack).expect("should recognize as an entity");
+    assert_eq!(r.kind, "npc");
+    assert!(r.fields.iter().any(|(k, v)| k == "Race" && v == "Human"));
+    assert!(r.fields.iter().any(|(k, v)| k == "Location" && v == "Vallaki"));
+}
+
+fn heading_block(text: &str, ord: u32) -> brain_core::Block {
+    brain_core::Block {
+        id: Some(BlockId::new(1)),
+        page_id: PageId::new(1),
+        col: 0,
+        ord,
+        bbox: brain_core::BBox { x0: 0.0, y0: ord as f64, x1: 1.0, y1: ord as f64 + 1.0 },
+        kind: brain_core::BlockKind::Heading,
+        text: text.to_string(),
+        heading_level: Some(1),
+    }
+}
+
+fn body_block(text: &str, ord: u32) -> brain_core::Block {
+    brain_core::Block { kind: brain_core::BlockKind::Body, heading_level: None, ..heading_block(text, ord) }
 }
 
 #[test]

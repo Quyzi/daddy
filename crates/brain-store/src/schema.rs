@@ -10,7 +10,7 @@ use rusqlite::Connection;
 /// Ordered list of migrations. Index 0 upgrades version 0 -> 1, and so on;
 /// there is no down-migration support (a fresh `brain init` is cheaper
 /// than a rollback for a locally-regenerable index).
-const MIGRATIONS: &[&str] = &[MIGRATION_0001];
+const MIGRATIONS: &[&str] = &[MIGRATION_0001, MIGRATION_0002];
 
 const MIGRATION_0001: &str = r#"
 CREATE TABLE documents (
@@ -162,6 +162,21 @@ CREATE TABLE edges (
 );
 CREATE INDEX idx_edges_src ON edges(src_id);
 CREATE INDEX idx_edges_dst ON edges(dst_id);
+"#;
+
+/// Adds support for structured (non-PDF) sources: a known heading depth
+/// per block (Markdown/AsciiDoc/HTML declare their own; PDFs never do,
+/// so this stays `NULL` for every block extracted before this migration
+/// and every PDF block extracted after it), and a document-level
+/// front-matter blob (Markdown/Obsidian YAML front matter, AsciiDoc
+/// document attributes, a `.url` entry's doc-comment title). Both are
+/// nullable additions — every existing row is unaffected, and every
+/// reader treats an absent value as "not applicable to this source" (see
+/// `brain_core::Block::heading_level`'s and `Document::frontmatter`'s
+/// docs) rather than an error.
+const MIGRATION_0002: &str = r#"
+ALTER TABLE blocks ADD COLUMN heading_level INTEGER;
+ALTER TABLE documents ADD COLUMN frontmatter TEXT;
 "#;
 
 /// Opens (or creates) the database at `path` and brings it up to the

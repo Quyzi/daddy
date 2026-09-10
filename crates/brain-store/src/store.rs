@@ -108,8 +108,8 @@ impl Store {
     pub fn insert_document(&self, doc: &Document) -> Result<DocId> {
         self.conn
             .execute(
-                "INSERT INTO documents(path, sha256, title, kind, page_count, bytes, ingested_at, extractor, ocr)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                "INSERT INTO documents(path, sha256, title, kind, page_count, bytes, ingested_at, extractor, ocr, frontmatter)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
                 params![
                     doc.path,
                     doc.sha256,
@@ -120,6 +120,7 @@ impl Store {
                     doc.ingested_at.to_rfc3339(),
                     doc.extractor.as_str(),
                     doc.ocr as i64,
+                    doc.frontmatter,
                 ],
             )
             .map_err(|e| BrainError::Db(e.to_string()))?;
@@ -130,7 +131,7 @@ impl Store {
     pub fn find_document_by_sha256(&self, sha256: &str) -> Result<Option<Document>> {
         self.conn
             .query_row(
-                "SELECT id, path, sha256, title, kind, page_count, bytes, ingested_at, extractor, ocr
+                "SELECT id, path, sha256, title, kind, page_count, bytes, ingested_at, extractor, ocr, frontmatter
                  FROM documents WHERE sha256 = ?1",
                 params![sha256],
                 Self::row_to_document,
@@ -143,7 +144,7 @@ impl Store {
     pub fn find_document_by_path(&self, path: &str) -> Result<Option<Document>> {
         self.conn
             .query_row(
-                "SELECT id, path, sha256, title, kind, page_count, bytes, ingested_at, extractor, ocr
+                "SELECT id, path, sha256, title, kind, page_count, bytes, ingested_at, extractor, ocr, frontmatter
                  FROM documents WHERE path = ?1",
                 params![path],
                 Self::row_to_document,
@@ -156,7 +157,7 @@ impl Store {
     pub fn get_document(&self, id: DocId) -> Result<Document> {
         self.conn
             .query_row(
-                "SELECT id, path, sha256, title, kind, page_count, bytes, ingested_at, extractor, ocr
+                "SELECT id, path, sha256, title, kind, page_count, bytes, ingested_at, extractor, ocr, frontmatter
                  FROM documents WHERE id = ?1",
                 params![id.get()],
                 Self::row_to_document,
@@ -170,7 +171,7 @@ impl Store {
     pub fn find_document_by_title(&self, title: &str) -> Result<Option<Document>> {
         self.conn
             .query_row(
-                "SELECT id, path, sha256, title, kind, page_count, bytes, ingested_at, extractor, ocr
+                "SELECT id, path, sha256, title, kind, page_count, bytes, ingested_at, extractor, ocr, frontmatter
                  FROM documents WHERE lower(title) = lower(?1) LIMIT 1",
                 params![title],
                 Self::row_to_document,
@@ -184,7 +185,7 @@ impl Store {
         let mut stmt = self
             .conn
             .prepare(
-                "SELECT id, path, sha256, title, kind, page_count, bytes, ingested_at, extractor, ocr
+                "SELECT id, path, sha256, title, kind, page_count, bytes, ingested_at, extractor, ocr, frontmatter
                  FROM documents ORDER BY title",
             )
             .map_err(|e| BrainError::Db(e.to_string()))?;
@@ -221,6 +222,7 @@ impl Store {
                 .unwrap_or_else(|_| Utc::now()),
             extractor: extractor.parse().unwrap_or(ExtractorKind::Plain),
             ocr: row.get::<_, i64>(9)? != 0,
+            frontmatter: row.get(10)?,
         })
     }
 
@@ -297,8 +299,8 @@ impl Store {
     pub fn insert_block(&self, block: &Block) -> Result<BlockId> {
         self.conn
             .execute(
-                "INSERT INTO blocks(page_id, col, ord, x0, y0, x1, y1, kind, text)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                "INSERT INTO blocks(page_id, col, ord, x0, y0, x1, y1, kind, text, heading_level)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
                 params![
                     block.page_id.get(),
                     block.col,
@@ -309,6 +311,7 @@ impl Store {
                     block.bbox.y1,
                     block_kind_str(block.kind),
                     block.text,
+                    block.heading_level,
                 ],
             )
             .map_err(|e| BrainError::Db(e.to_string()))?;
@@ -320,7 +323,7 @@ impl Store {
         let mut stmt = self
             .conn
             .prepare(
-                "SELECT id, page_id, col, ord, x0, y0, x1, y1, kind, text
+                "SELECT id, page_id, col, ord, x0, y0, x1, y1, kind, text, heading_level
                  FROM blocks WHERE page_id = ?1 ORDER BY ord",
             )
             .map_err(|e| BrainError::Db(e.to_string()))?;
@@ -340,6 +343,7 @@ impl Store {
                     },
                     kind: parse_block_kind(&kind),
                     text: row.get(9)?,
+                    heading_level: row.get::<_, Option<i64>>(10)?.map(|v| v as u8),
                 })
             })
             .map_err(|e| BrainError::Db(e.to_string()))?;
@@ -354,7 +358,7 @@ impl Store {
         let mut stmt = self
             .conn
             .prepare(
-                "SELECT p.page_no, b.id, b.page_id, b.col, b.ord, b.x0, b.y0, b.x1, b.y1, b.kind, b.text
+                "SELECT p.page_no, b.id, b.page_id, b.col, b.ord, b.x0, b.y0, b.x1, b.y1, b.kind, b.text, b.heading_level
                  FROM blocks b JOIN pages p ON p.id = b.page_id
                  WHERE p.doc_id = ?1 AND p.low_confidence = 0
                  ORDER BY p.page_no, b.ord",
@@ -379,6 +383,7 @@ impl Store {
                         },
                         kind: parse_block_kind(&kind),
                         text: row.get(10)?,
+                        heading_level: row.get::<_, Option<i64>>(11)?.map(|v| v as u8),
                     },
                 ))
             })
@@ -1096,6 +1101,7 @@ fn block_kind_str(kind: BlockKind) -> &'static str {
         BlockKind::StatBlock => "statblock",
         BlockKind::Caption => "caption",
         BlockKind::Chrome => "chrome",
+        BlockKind::Code => "code",
     }
 }
 
@@ -1106,6 +1112,7 @@ fn parse_block_kind(s: &str) -> BlockKind {
         "statblock" => BlockKind::StatBlock,
         "caption" => BlockKind::Caption,
         "chrome" => BlockKind::Chrome,
+        "code" => BlockKind::Code,
         _ => BlockKind::Body,
     }
 }
@@ -1141,6 +1148,7 @@ mod tests {
             ingested_at: Utc::now(),
             extractor: ExtractorKind::Poppler,
             ocr: false,
+            frontmatter: None,
         }
     }
 
@@ -1183,6 +1191,7 @@ mod tests {
                 bbox: BBox { x0: 0.0, y0: 0.0, x1: 10.0, y1: 10.0 },
                 kind: BlockKind::Heading,
                 text: "Chapter One".into(),
+                heading_level: None,
             })
             .unwrap();
         let blocks = store.list_blocks(page_id).unwrap();

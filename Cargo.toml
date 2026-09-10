@@ -6,6 +6,7 @@ members = [
     "crates/brain-layout",
     "crates/brain-index",
     "crates/brain-store",
+    "crates/brain-datasource",
     "crates/brain-query",
     "crates/brain-wiki",
     "crates/brain-cli",
@@ -24,6 +25,7 @@ brain-extract = { path = "crates/brain-extract" }
 brain-layout = { path = "crates/brain-layout" }
 brain-index = { path = "crates/brain-index" }
 brain-store = { path = "crates/brain-store" }
+brain-datasource = { path = "crates/brain-datasource" }
 brain-query = { path = "crates/brain-query" }
 brain-wiki = { path = "crates/brain-wiki" }
 brain-mcp = { path = "crates/brain-mcp" }
@@ -47,6 +49,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 quick-xml = "0.36"
 zstd = "0.13"
 walkdir = "2"
+pulldown-cmark = "0.13"
+ureq = "3"
+scraper = "0.27"
 
 [profile.release]
 opt-level = 3
