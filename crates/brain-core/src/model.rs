@@ -89,6 +89,15 @@ pub struct Document {
     pub extractor: ExtractorKind,
     /// Whether any page in this document required OCR.
     pub ocr: bool,
+    /// Structured front matter, when the source declares any: Markdown/
+    /// Obsidian YAML front matter, AsciiDoc `:attr: value` document
+    /// attributes, or a `.url` entry's `///` doc-comment title —
+    /// serialized as a JSON object string. `None` for PDFs and any
+    /// source with no such metadata. `title`/`tags`/`aliases` keys are
+    /// read out of this by `brain-index`'s wikilink/tag handling (see
+    /// `brain_index::wikilink`); everything else is opaque, passed
+    /// through for `brain get`/`brain page` and `brain-wiki` to display.
+    pub frontmatter: Option<String>,
 }
 
 /// The structural role a layout block plays on a page.
@@ -108,6 +117,12 @@ pub enum BlockKind {
     /// Running header/footer chrome (page numbers, book title) — excluded
     /// from indexing.
     Chrome,
+    /// A fenced/listing code block (Markdown ` ``` `, AsciiDoc `----`, an
+    /// HTML `<pre>`/`<code>`). Indexed like body text, but never split at
+    /// paragraph boundaries and never mined for entity mentions — a code
+    /// sample's tokens are not prose, and finding e.g. an entity named
+    /// "range" inside a variable name would be noise, not a real mention.
+    Code,
 }
 
 /// One block of laid-out text on a page, in final reading order.
@@ -127,6 +142,18 @@ pub struct Block {
     pub kind: BlockKind,
     /// The block's rejoined, whitespace-normalized text.
     pub text: String,
+    /// Heading depth, when it is *known* rather than guessed: `Some(1)`
+    /// for a Markdown `#`/AsciiDoc `=`/HTML `<h1>`, `Some(2)` for `##`/
+    /// `==`/`<h2>`, and so on. `None` for every non-heading block, and
+    /// also for a PDF's heading blocks — `brain-layout`'s ensemble scorer
+    /// (see its module docs) has no reliable signal for *depth*, only
+    /// for "is this a heading at all", so a PDF's sections stay flat
+    /// (see [`crate::slugify`]'s sibling docs and
+    /// `brain-index::sections::build_sections`, which only nests by
+    /// level when this is populated). Structured formats that declare
+    /// their own heading depth get real nested sections for free; PDFs
+    /// keep their existing flat behavior unchanged.
+    pub heading_level: Option<u8>,
 }
 
 /// A heading-derived section of a document, forming a tree via `parent_id`.
@@ -289,6 +316,14 @@ pub enum EdgeKind {
     SameAs,
     /// `src` and `dst` give conflicting field values for the same entity.
     Contradicts,
+    /// `src`'s source text explicitly, deliberately links to `dst` — an
+    /// Obsidian/Markdown `[[wikilink]]`, or a relative Markdown link that
+    /// resolves to another ingested document. Distinct from `Mentions`/
+    /// `References` (both mined automatically from name matches) because
+    /// a human choosing to link two notes together is stronger, more
+    /// deliberate signal than an incidental name occurrence — weighted
+    /// accordingly in `brain_index::pagerank`.
+    LinksTo,
 }
 
 impl EdgeKind {
@@ -302,6 +337,7 @@ impl EdgeKind {
             EdgeKind::CoOccurs => "co_occurs",
             EdgeKind::SameAs => "same_as",
             EdgeKind::Contradicts => "contradicts",
+            EdgeKind::LinksTo => "links_to",
         }
     }
 }
@@ -317,6 +353,7 @@ impl std::str::FromStr for EdgeKind {
             "co_occurs" => Ok(EdgeKind::CoOccurs),
             "same_as" => Ok(EdgeKind::SameAs),
             "contradicts" => Ok(EdgeKind::Contradicts),
+            "links_to" => Ok(EdgeKind::LinksTo),
             other => Err(crate::error::BrainError::InvalidData(format!(
                 "unknown edge kind {other:?}"
             ))),

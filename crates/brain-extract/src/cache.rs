@@ -27,6 +27,18 @@ pub fn sha256_file(path: &Path) -> Result<String> {
     Ok(format!("{:x}", hasher.finalize()))
 }
 
+/// Computes the SHA-256 of in-memory bytes — the dedup key for a
+/// structured document (Markdown/AsciiDoc/a fetched URL/a datasource
+/// query result), whose content isn't simply "the bytes of one file on
+/// disk" the way a PDF's or plain-text file's is (a `.urls` list's own
+/// file bytes don't change when a URL's live content does; see
+/// `brain-cli`'s `ingest.rs` for how this is used).
+pub fn sha256_bytes(data: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(data);
+    format!("{:x}", hasher.finalize())
+}
+
 /// A directory of `{sha256}/pages.json.zst` blobs, one per distinct source
 /// file ever ingested.
 pub struct Cache {

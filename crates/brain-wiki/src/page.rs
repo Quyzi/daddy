@@ -7,7 +7,7 @@ use brain_core::error::Result;
 use brain_core::{slugify, Entity};
 use brain_store::Store;
 use chrono::NaiveDate;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 /// Maximum related-entity links shown, heaviest edge first.
 const MAX_RELATED: usize = 20;
@@ -88,11 +88,24 @@ fn write_related(store: &Store, entity_id: brain_core::EntityId, out: &mut Strin
     if edges.is_empty() {
         return Ok(());
     }
+    // Two entities can be connected by more than one edge *kind* at once
+    // (e.g. a document that both `[[wikilinks]]` another note and
+    // separately mentions it by name in the gazetteer's whole-corpus
+    // pass gets both a `LinksTo` and a `Mentions`/`CoOccurs` edge to it)
+    // — list each related entity once, at its strongest connection,
+    // rather than once per edge kind.
+    let mut seen = HashSet::new();
     let mut links = Vec::new();
-    for edge in edges.into_iter().take(MAX_RELATED) {
+    for edge in edges {
         let other_id = if edge.src == entity_id { edge.dst } else { edge.src };
+        if !seen.insert(other_id) {
+            continue;
+        }
         let other = store.get_entity(other_id)?;
         links.push(format!("[[{}]]", other.slug));
+        if links.len() >= MAX_RELATED {
+            break;
+        }
     }
     out.push_str("## Related\n\n");
     out.push_str(&links.join(" \u{b7} "));

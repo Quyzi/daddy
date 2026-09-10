@@ -1,9 +1,16 @@
-//! Extraction backend for already-textual sources (`.txt`, `.md`, `.html`,
-//! `.json`, `.csv`, ...) that have no page geometry of their own. Each
-//! source becomes a single synthetic page whose "geometry" just encodes
-//! line/word order, so `brain-layout` can treat it identically to a PDF
-//! page (trivially — one column, headings still detected from blank-line
-//! and Markdown-heading conventions).
+//! Extraction backend for already-textual sources with no structure of
+//! their own to preserve (`.txt`, `.log`, `.rst`, `.csv`, `.html`,
+//! `.htm`) — anything with real structure worth keeping now has its own
+//! [`crate::StructuredExtractor`] (Markdown: [`crate::MarkdownExtractor`];
+//! AsciiDoc: [`crate::AsciidocExtractor`]; fetched HTML:
+//! [`crate::UrlExtractor`]) that parses it directly instead of routing it
+//! through here and `brain-layout`'s geometry-guessing heuristics — see
+//! `crate::structured`'s module docs for why that distinction matters.
+//! Each source handled here becomes a single synthetic page whose
+//! "geometry" just encodes line/word order, so `brain-layout` can treat
+//! it identically to a PDF page (trivially — one column, headings
+//! guessed from blank-line/short-line conventions same as any other
+//! structure-free text).
 
 use crate::types::{Capability, Extractor, PageRange};
 use brain_core::error::Result;
@@ -12,7 +19,7 @@ use regex::Regex;
 use std::path::Path;
 use std::sync::OnceLock;
 
-const PLAIN_EXTENSIONS: &[&str] = &["txt", "md", "markdown", "log", "adoc", "rst", "csv"];
+const PLAIN_EXTENSIONS: &[&str] = &["txt", "log", "rst", "csv"];
 const MARKUP_EXTENSIONS: &[&str] = &["html", "htm", "xml"];
 
 /// Reads plain-text-ish files directly, synthesizing word positions from
@@ -139,7 +146,10 @@ mod tests {
     #[test]
     fn probe_accepts_known_text_extensions_only() {
         let ex = PlainExtractor::new();
-        assert!(ex.probe(Path::new("notes.md")).unwrap().supported);
+        assert!(ex.probe(Path::new("notes.txt")).unwrap().supported);
         assert!(!ex.probe(Path::new("book.pdf")).unwrap().supported);
+        // Markdown now has its own dedicated StructuredExtractor (see
+        // this module's docs) — PlainExtractor no longer claims it.
+        assert!(!ex.probe(Path::new("notes.md")).unwrap().supported);
     }
 }

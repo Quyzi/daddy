@@ -28,6 +28,7 @@ pub mod orchestrate;
 pub mod pack;
 pub mod pagerank;
 pub mod sections;
+pub mod wikilink;
 
 pub use chunk::{build_chunks, display_name, recognize, BuiltChunk, Recognized};
 pub use edges::derive_edges_for_chunk;
@@ -36,3 +37,4 @@ pub use orchestrate::{index_all, IndexReport};
 pub use pack::{CompiledPack, RulePack};
 pub use pagerank::pagerank;
 pub use sections::{build_sections, BuiltSection};
+pub use wikilink::{extract_tags, extract_wikilinks, frontmatter_list, normalize_alias, WikiLink};

@@ -34,6 +34,7 @@ fn seeded_store() -> Store {
             ingested_at: Utc::now(),
             extractor: ExtractorKind::Poppler,
             ocr: false,
+            frontmatter: None,
         })
         .unwrap();
     let page = store
@@ -49,7 +50,7 @@ fn seeded_store() -> Store {
     .enumerate()
     {
         store
-            .insert_block(&Block { id: None, page_id: page, col: 0, ord: ord as u32, bbox: BBox { x0: 0.0, y0: 0.0, x1: 1.0, y1: 1.0 }, kind, text: text.into() })
+            .insert_block(&Block { id: None, page_id: page, col: 0, ord: ord as u32, bbox: BBox { x0: 0.0, y0: 0.0, x1: 1.0, y1: 1.0 }, kind, text: text.into(), heading_level: None })
             .unwrap();
     }
     let pack = CompiledPack::compile(&RulePack::parse(PACK_TOML).unwrap()).unwrap();
@@ -158,8 +159,138 @@ fn compile_never_overwrites_a_curated_page() {
 }
 
 #[test]
+fn related_section_lists_a_multiply_connected_entity_only_once() {
+    // Mirrors a real case: a note that both `[[wikilinks]]` another note
+    // and separately mentions its name (picked up by the gazetteer's
+    // whole-corpus scan) ends up with a LinksTo edge *and* a Mentions/
+    // CoOccurs edge to the very same entity -- "## Related" must still
+    // list it exactly once, not once per edge kind.
+    let mut store = Store::open_in_memory().unwrap();
+
+    let doc = store
+        .insert_document(&Document {
+            id: None,
+            path: "/tmp/barovia.md".into(),
+            sha256: "barovia".into(),
+            title: "Barovia".into(),
+            kind: "md".into(),
+            page_count: 1,
+            bytes: 1,
+            ingested_at: Utc::now(),
+            extractor: ExtractorKind::Plain,
+            ocr: false,
+            frontmatter: None,
+        })
+        .unwrap();
+    let page = store
+        .insert_page(&Page { id: None, doc_id: doc, page_no: 1, width: 1.0, height: 1.0, text: String::new(), ocr_conf: None, low_confidence: false })
+        .unwrap();
+    store
+        .insert_block(&Block { id: None, page_id: page, col: 0, ord: 0, bbox: BBox { x0: 0.0, y0: 0.0, x1: 1.0, y1: 1.0 }, kind: BlockKind::Heading, text: "Barovia".into(), heading_level: Some(1) })
+        .unwrap();
+    store
+        .insert_block(&Block {
+            id: None,
+            page_id: page,
+            col: 0,
+            ord: 1,
+            bbox: BBox { x0: 0.0, y0: 1.0, x1: 1.0, y1: 2.0 },
+            kind: BlockKind::Body,
+            text: "Ruled by [[Strahd von Zarovich]]. Strahd von Zarovich is feared throughout the land.".into(),
+            heading_level: None,
+        })
+        .unwrap();
+
+    let strahd_doc = store
+        .insert_document(&Document {
+            id: None,
+            path: "/tmp/strahd.md".into(),
+            sha256: "strahd".into(),
+            title: "Strahd von Zarovich".into(),
+            kind: "md".into(),
+            page_count: 1,
+            bytes: 1,
+            ingested_at: Utc::now(),
+            extractor: ExtractorKind::Plain,
+            ocr: false,
+            frontmatter: None,
+        })
+        .unwrap();
+    let strahd_page = store
+        .insert_page(&Page { id: None, doc_id: strahd_doc, page_no: 1, width: 1.0, height: 1.0, text: String::new(), ocr_conf: None, low_confidence: false })
+        .unwrap();
+    store
+        .insert_block(&Block { id: None, page_id: strahd_page, col: 0, ord: 0, bbox: BBox { x0: 0.0, y0: 0.0, x1: 1.0, y1: 1.0 }, kind: BlockKind::Heading, text: "Strahd von Zarovich".into(), heading_level: Some(1) })
+        .unwrap();
+    store
+        .insert_block(&Block { id: None, page_id: strahd_page, col: 0, ord: 1, bbox: BBox { x0: 0.0, y0: 1.0, x1: 1.0, y1: 2.0 }, kind: BlockKind::Body, text: "The vampire lord.".into(), heading_level: None })
+        .unwrap();
+
+    let pack = CompiledPack::compile(&RulePack::parse(PACK_TOML).unwrap()).unwrap();
+    index_all(&mut store, &pack).unwrap();
+
+    let dir = tempfile::tempdir().unwrap();
+    compile(&store, dir.path(), 0.0).unwrap();
+    let content = fs::read_to_string(dir.path().join("barovia.md")).unwrap();
+    let related_line = content.lines().skip_while(|l| *l != "## Related").nth(2).unwrap_or("");
+    let occurrences = related_line.matches("[[strahd-von-zarovich]]").count();
+    assert_eq!(occurrences, 1, "Strahd should appear exactly once in Barovia's Related section, got: {related_line:?}");
+}
+
+#[test]
 fn lint_reports_no_contradictions_for_a_clean_single_source_graph() {
     let store = seeded_store();
     let report = lint(&store).unwrap();
     assert!(report.contradictions.is_empty());
+}
+
+#[test]
+fn lint_reports_a_wikilink_with_no_matching_document_and_not_a_resolved_one() {
+    let mut store = Store::open_in_memory().unwrap();
+    let doc = store
+        .insert_document(&Document {
+            id: None,
+            path: "/tmp/session-one.md".into(),
+            sha256: "session-one".into(),
+            title: "Session One".into(),
+            kind: "md".into(),
+            page_count: 1,
+            bytes: 1,
+            ingested_at: Utc::now(),
+            extractor: ExtractorKind::Plain,
+            ocr: false,
+            frontmatter: None,
+        })
+        .unwrap();
+    let page = store
+        .insert_page(&Page { id: None, doc_id: doc, page_no: 1, width: 1.0, height: 1.0, text: String::new(), ocr_conf: None, low_confidence: false })
+        .unwrap();
+    store
+        .insert_block(&Block { id: None, page_id: page, col: 0, ord: 0, bbox: BBox { x0: 0.0, y0: 0.0, x1: 1.0, y1: 1.0 }, kind: BlockKind::Heading, text: "Session One".into(), heading_level: Some(1) })
+        .unwrap();
+    store
+        .insert_block(&Block {
+            id: None,
+            page_id: page,
+            col: 0,
+            ord: 1,
+            bbox: BBox { x0: 0.0, y0: 1.0, x1: 1.0, y1: 2.0 },
+            kind: BlockKind::Body,
+            text: "The party met [[Ireena Kolyana]], who was not yet ingested, and later [[Session One]] itself.".into(),
+            heading_level: None,
+        })
+        .unwrap();
+
+    let pack = CompiledPack::compile(&RulePack::parse(PACK_TOML).unwrap()).unwrap();
+    index_all(&mut store, &pack).unwrap();
+
+    let report = lint(&store).unwrap();
+    assert!(
+        report.unresolved_wikilinks.iter().any(|l| l.target == "Ireena Kolyana"),
+        "a link to a not-yet-ingested note must be reported, not silently dropped"
+    );
+    assert!(
+        !report.unresolved_wikilinks.iter().any(|l| l.target == "Session One"),
+        "a self-link that already resolves must not also be reported as unresolved"
+    );
 }

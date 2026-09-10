@@ -12,6 +12,7 @@ path = "src/main.rs"
 [dependencies]
 brain-core.workspace = true
 brain-store.workspace = true
+brain-datasource.workspace = true
 brain-extract.workspace = true
 brain-layout.workspace = true
 brain-index.workspace = true

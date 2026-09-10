@@ -39,12 +39,64 @@ pub fn get_entity(store: &Store, name_or_slug: &str) -> Result<Option<EntityView
 
     let mut edges = store.edges_touching(entity_id)?;
     edges.sort_by(|a, b| b.weight.partial_cmp(&a.weight).unwrap());
+    // Two entities can be connected by more than one edge *kind* at once
+    // (e.g. a `[[wikilink]]` to another note that's also separately
+    // picked up as a gazetteer mention gets both a `LinksTo` edge and a
+    // `Mentions`/`CoOccurs` edge to the same entity) — list each
+    // neighbour once, at its strongest connection, not once per kind.
+    let mut seen = std::collections::HashSet::new();
     let mut neighbours = Vec::new();
-    for edge in edges.into_iter().take(MAX_NEIGHBOURS) {
+    for edge in edges {
         let other_id = if edge.src == entity_id { edge.dst } else { edge.src };
+        if !seen.insert(other_id) {
+            continue;
+        }
         let other = store.get_entity(other_id)?;
         neighbours.push(Neighbour { id: other_id, name: other.name, kind: other.kind.as_str(), weight: edge.weight });
+        if neighbours.len() >= MAX_NEIGHBOURS {
+            break;
+        }
     }
 
     Ok(Some(EntityView { name: entity.name, kind: entity.kind.as_str(), definition, citation, fields, neighbours }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use brain_core::{Edge, EdgeKind, Entity, EntityKind};
+
+    fn make_entity(store: &Store, name: &str) -> brain_core::EntityId {
+        store
+            .upsert_entity(&Entity {
+                id: None,
+                kind: EntityKind::Topic,
+                name: name.to_string(),
+                slug: brain_core::slugify(name),
+                canonical_id: None,
+                centrality: 0.0,
+                confidence: 1.0,
+            })
+            .unwrap()
+    }
+
+    #[test]
+    fn neighbours_lists_an_entity_connected_by_multiple_edge_kinds_only_once() {
+        let store = Store::open_in_memory().unwrap();
+        let barovia = make_entity(&store, "Barovia");
+        let strahd = make_entity(&store, "Strahd");
+
+        // The same pair, connected three different ways -- exactly what
+        // a `[[wikilink]]`ed note that's also gazetteer-mentioned in the
+        // same text produces.
+        for kind in [EdgeKind::LinksTo, EdgeKind::Mentions, EdgeKind::CoOccurs] {
+            store
+                .add_edge(&Edge { src: barovia, dst: strahd, kind, weight: 1.0, evidence_chunk_id: None })
+                .unwrap();
+        }
+
+        let view = get_entity(&store, "Barovia").unwrap().expect("barovia should exist");
+        let strahd_count = view.neighbours.iter().filter(|n| n.name == "Strahd").count();
+        assert_eq!(strahd_count, 1, "Strahd should appear once regardless of how many edge kinds connect it");
+    }
 }

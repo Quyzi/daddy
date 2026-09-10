@@ -1,0 +1,15 @@
+[package]
+name = "brain-datasource"
+description = "The Datasource extension point: ingesting live queryable stores (SQLite built in; Postgres/MySQL are documented extension points) as opposed to files."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+brain-core.workspace = true
+rusqlite.workspace = true
+serde.workspace = true
+toml.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

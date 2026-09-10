@@ -4,10 +4,17 @@ A Rust workspace implementing `brain` — a document-graph indexer for Karpathy'
 brain" LLM wiki pattern — plus the Claude Code / Cursor / Codex **skills** built on top of
 it, and the knowledge bases ("brains") those skills produce.
 
-`brain` does the mechanical work of building a second brain (PDF/OCR extraction, layout
-reconstruction, entity recognition, graph edges, wiki page generation) entirely in Rust, at
-zero AI token cost — an AI agent's job becomes querying the graph and curating what it
-produces, not reading every source PDF by hand.
+`brain` does the mechanical work of building a second brain — PDF/OCR extraction, layout
+reconstruction, Markdown/AsciiDoc/Obsidian/URL/live-datasource ingestion, entity recognition,
+graph edges, wiki page generation — entirely in Rust, at zero AI token cost — an AI agent's job
+becomes querying the graph and curating what it produces, not reading every source by hand.
+
+Source types understood today, each with its real structure preserved rather than flattened
+and re-guessed: PDFs (native text + OCR fallback), Markdown/Obsidian notes (`[[wikilinks]]`,
+`#tags`, YAML front matter, real heading depth), AsciiDoc, fetched web pages (`raw/urls/*.url`/
+`*.urls` lists), and live SQL datasources (SQLite built in; Postgres/MySQL are a documented
+extension point — see `crates/brain-datasource`) — plus a plain-text fallback (`.txt`/`.log`/
+`.rst`/`.csv`/`.html`) for anything else.
 
 ## What's in here
 
@@ -18,15 +25,16 @@ daddy/
 │   ├── brain-core/                         ← shared types, IDs, config, errors
 │   ├── brain-extract/                      ← PDF/OCR/plain-text extraction + content-addressed cache
 │   ├── brain-layout/                       ← pure-geometry page reconstruction (columns, headings, rejoin)
-│   ├── brain-index/                        ← rule-pack recognition, chunking, gazetteer, edges, PageRank
+│   ├── brain-index/                        ← rule-pack recognition, chunking, gazetteer, wikilinks, edges, PageRank
 │   ├── brain-store/                        ← SQLite (FTS5) schema + all SQL
+│   ├── brain-datasource/                   ← live SQL datasource ingestion (SQLite built in; Postgres/MySQL are an extension point)
 │   ├── brain-query/                        ← ranked, cited, graph-walk retrieval
 │   ├── brain-wiki/                         ← deterministic wiki page generation + lint
 │   ├── brain-mcp/                          ← MCP server exposing explore/get/page/stats
 │   └── brain-cli/                          ← the `brain` binary (clap)
 ├── packs/
 │   ├── generic.toml                        ← headings-only entity recognizer, works for any brain
-│   └── dnd5e.toml                          ← spell/monster/item recognizers
+│   └── dnd5e.toml                          ← spell/monster/item/npc recognizers
 ├── .agent/skills/
 │   ├── brain/                              ← "second-brain" skill: scaffolds a new knowledge base
 │   │   ├── SKILL.md
@@ -40,7 +48,8 @@ daddy/
 │   └── {name}/                             ← each brain is its own independent git repo
 │       ├── CLAUDE.md                       ← that brain's schema + workflows
 │       ├── .brain/                         ← gitignored within the brain repo; graph.db + extraction cache
-│       ├── raw/                            ← immutable source material
+│       │   └── sources.toml                ← optional: live SQL datasources to query on every `ingest`
+│       ├── raw/                            ← immutable source material (raw/urls/*.url|*.urls: links to fetch)
 │       ├── wiki/                           ← generated + curated interlinked pages (index.md, log.md, ...)
 │       └── outputs/                        ← generated reports/briefings worth keeping
 └── .gitignore                              ← ignores /target and brains/

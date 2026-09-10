@@ -13,17 +13,27 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod asciidoc;
 pub mod cache;
+pub mod frontmatter;
+pub mod html;
+pub mod markdown;
 mod pdfutil;
 pub mod plain;
 pub mod poppler;
 pub mod select;
+pub mod structured;
 pub mod tesseract;
 pub mod types;
+pub mod url;
 
-pub use cache::{sha256_file, Cache};
+pub use asciidoc::AsciidocExtractor;
+pub use cache::{sha256_bytes, sha256_file, Cache};
+pub use markdown::MarkdownExtractor;
 pub use plain::PlainExtractor;
 pub use poppler::PopplerExtractor;
 pub use select::{extract_auto, is_low_confidence};
+pub use structured::{StructuredBlock, StructuredDoc, StructuredExtractor};
 pub use tesseract::TesseractExtractor;
 pub use types::{Capability, Extractor, PageRange};
+pub use url::UrlExtractor;

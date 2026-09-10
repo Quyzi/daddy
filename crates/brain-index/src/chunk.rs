@@ -198,6 +198,8 @@ mod tests {
             start_page: 1,
             end_page: 1,
             body_blocks: body_blocks.into_iter().map(|s| (1, s.to_string())).collect(),
+            level: 1,
+            parent_index: None,
         }
     }
 
